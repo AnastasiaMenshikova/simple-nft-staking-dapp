@@ -3,8 +3,8 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
-error NotOwner();
-error ContractPaused();
+error NotOwner(string message);
+error ContractPaused(string message);
 
 contract GardenNFT is ERC1155 {
 
@@ -19,14 +19,14 @@ contract GardenNFT is ERC1155 {
 
     modifier onlyOwner(){
         if (msg.sender != owner) {
-            revert NotOwner();
+            revert NotOwner("Only the contract owner can perform this action");
         }
         _;
     }
     // In case of emergency sets contract on pause
     modifier onlyWhenNotPaused() {
         if(_paused){
-            revert ContractPaused();
+            revert ContractPaused("Contract is currently paused");
         }
         _;
     }
@@ -42,13 +42,14 @@ contract GardenNFT is ERC1155 {
      */
     function mint(uint256 id, uint256 numberOfTokens) public payable onlyWhenNotPaused {
         require(numberOfTokens != 0, "You need to mint at least 1 token");
-        require((numberOfTokens * mintPrice) == msg.value, "Not enough Ether sent.");
+        require(msg.value >= (numberOfTokens * mintPrice), "Not enough Ether sent.");
 
         treasury += (numberOfTokens * mintPrice);
 
         _mint(msg.sender, id, numberOfTokens, "");
     }
 
+   
     function getMintPrice () public view returns (uint256) {
         return mintPrice;
     }
@@ -67,16 +68,27 @@ contract GardenNFT is ERC1155 {
     }
 
     function transferOwnership (address newOwner) public onlyOwner {
-        owner = newOwner;
+        require(newOwner != address(0), "New owner address cannot be zero address");
+          owner = newOwner;
     }
 
     /**
      * @dev withdraw fees from the contract
      */
-    function collectFee() public onlyOwner {
-        require (treasury > 0, "Treasury is empty");
-        (bool success, ) = msg.sender.call{value: treasury}("");
-        require(success, "Failed to withdraw");
-    }
+   
+
+    function _collectFee() private onlyOwner {
+    require(treasury > 0, "Treasury is empty");
+    uint256 amount = treasury;
+    treasury = 0;
+    (bool success, ) = address(this).call{value: amount}("");
+    require(success, "Transfer failed");
+}
+
+function withdraw() public onlyOwner {
+    _collectFee();
+}
+
+
 
 }
